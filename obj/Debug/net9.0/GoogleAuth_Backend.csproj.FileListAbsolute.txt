@@ -48,3 +48,5 @@ C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\Sys
 C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\System.IdentityModel.Tokens.Jwt.dll
 C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\System.Management.dll
 C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\runtimes\win\lib\net7.0\System.Management.dll
+C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\usuarios.json
+C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\obj\Debug\net9.0\GoogleAuth_Backend.sourcelink.json

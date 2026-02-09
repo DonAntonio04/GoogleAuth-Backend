@@ -9,18 +9,18 @@ using GoogleAuth.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Configurar CORS para Angular
-var misOrigenesPermitidos = "PermitirAngular";
+// 1. Configurar política de CORS
+var misOrigenesPermitidos = "PermitirColaborador";
 builder.Services.AddCors(options => {
     options.AddPolicy(name: misOrigenesPermitidos, policy => {
-        policy.WithOrigins("http://localhost:4200")
+        // Permitimos cualquier origen, encabezado y método para facilitar las pruebas locales
+        policy.AllowAnyOrigin()
               .AllowAnyHeader()
               .WithMethods("GET", "POST", "PUT", "DELETE");
     });
 });
 
-// 2. AGREGAR ESTO: Configuración de servicios de Autenticación
-// Sin esto, app.UseAuthentication() no sabe qué hacer.
+// 2. Configuración de servicios de Autenticación (JWT)
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -40,15 +40,20 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
-// 3. AGREGAR ESTO: Middleware de COOP (Debe ir antes de otros)
+// --- MIDDLEWARES (El orden es vital aquí) ---
+
+// A. Middleware de COOP para autenticación de Google
 app.Use((context, next) =>
 {
     context.Response.Headers.Append("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
     return next();
 });
 
-app.UseHttpsRedirection(); // Asegura el uso de HTTPS (Puerto 7159)
+// B. CORS debe ir ANTES de la autenticación y redirección
 app.UseCors(misOrigenesPermitidos);
+
+// C. Otros Middlewares del sistema
+app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -56,6 +61,7 @@ const string RUTA_ARCHIVO = "usuarios.json";
 
 // --- ENDPOINTS ---
 
+// Registro de usuario local
 app.MapPost("/api/auth/register", async (RegisterRequest request) => {
     var json = File.Exists(RUTA_ARCHIVO) ? await File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
     var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
@@ -67,6 +73,8 @@ app.MapPost("/api/auth/register", async (RegisterRequest request) => {
     {
         Nombre = request.Nombre,
         Email = request.Email,
+        Apellido = request.Apellido,
+        Telefono = request.Telefono,
         Password = request.Password
     });
 
@@ -74,6 +82,7 @@ app.MapPost("/api/auth/register", async (RegisterRequest request) => {
     return Results.Ok(new { Message = "Usuario registrado." });
 });
 
+// Login con Google
 app.MapPost("/api/auth/google-login", async (GoogleRequest request, IConfiguration config) => {
     try
     {
@@ -81,18 +90,20 @@ app.MapPost("/api/auth/google-login", async (GoogleRequest request, IConfigurati
         {
             Audience = new List<string> { config["Authentication:Google:ClientId"] }
         };
-        var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+        var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings); //aqui av el punto de interrupcion
+
         var token = GenerarJwt(payload.Name, payload.Email, config);
         return Results.Ok(new { Token = token, UserName = payload.Name });
     }
     catch (Exception ex)
     {
-        // Cambiado para que puedas ver el error real en la consola de depuración
         return Results.BadRequest(new { Error = "Token de Google inválido", Details = ex.Message });
     }
 });
 
 app.Run();
+
+// --- FUNCIONES AUXILIARES ---
 
 string GenerarJwt(string nombre, string email, IConfiguration config)
 {
@@ -101,12 +112,16 @@ string GenerarJwt(string nombre, string email, IConfiguration config)
     var token = new JwtSecurityToken(
         issuer: config["Jwt:Issuer"],
         audience: config["Jwt:Audience"],
-        claims: new[] { new Claim(ClaimTypes.Name, nombre), new Claim(ClaimTypes.Email, email) },
+        claims: new[] {
+            new Claim(ClaimTypes.Name, nombre),
+            new Claim(ClaimTypes.Email, email)
+        },
         expires: DateTime.Now.AddDays(1),
         signingCredentials: creds
     );
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
 
-public record RegisterRequest(string Nombre, string Email, string Password);
+// DTOs necesarios para los endpoints
+public record RegisterRequest(string Nombre, string Apellido, string Email, string Telefono, string Password); 
 public record GoogleRequest(string IdToken);
