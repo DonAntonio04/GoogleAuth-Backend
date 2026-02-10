@@ -1,47 +1,35 @@
 [
   {
-    "ContainingType": "Program\u002B\u003C\u003Ec",
-    "Method": "\u003C\u003CMain\u003E$\u003Eb__0_4",
+    "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
+    "Method": "GoogleLogin",
     "RelativePath": "api/auth/google-login",
     "HttpMethod": "POST",
-    "IsController": false,
+    "IsController": true,
     "Order": 0,
     "Parameters": [
       {
         "Name": "request",
-        "Type": "GoogleRequest",
+        "Type": "GoogleAuth_Backend.Models.GoogleRequest",
         "IsRequired": true
       }
     ],
-    "ReturnTypes": [
-      {
-        "Type": "System.Void",
-        "MediaTypes": [],
-        "StatusCode": 200
-      }
-    ]
+    "ReturnTypes": []
   },
   {
-    "ContainingType": "Program\u002B\u003C\u003Ec",
-    "Method": "\u003C\u003CMain\u003E$\u003Eb__0_3",
+    "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
+    "Method": "Register",
     "RelativePath": "api/auth/register",
     "HttpMethod": "POST",
-    "IsController": false,
+    "IsController": true,
     "Order": 0,
     "Parameters": [
       {
         "Name": "request",
-        "Type": "RegisterRequest",
+        "Type": "GoogleAuth_Backend.Models.RegisterRequest",
         "IsRequired": true
       }
     ],
-    "ReturnTypes": [
-      {
-        "Type": "System.Void",
-        "MediaTypes": [],
-        "StatusCode": 200
-      }
-    ]
+    "ReturnTypes": []
   },
   {
     "ContainingType": "GoogleAuth_Backend.Controllers.WeatherForecastController",
