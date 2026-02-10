@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GoogleAuth_Backend")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e1e239553ae5653393e9bc3925da916c48d75384")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b42dcf5f29f0e9f8714adb630026228c5cfc97e9")]
 [assembly: System.Reflection.AssemblyProductAttribute("GoogleAuth_Backend")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GoogleAuth_Backend")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

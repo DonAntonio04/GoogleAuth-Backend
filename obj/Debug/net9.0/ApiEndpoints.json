@@ -1,8 +1,24 @@
 [
   {
     "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
-    "Method": "GoogleLogin",
+    "Method": "GoogleAuth",
     "RelativePath": "api/auth/google-login",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "GoogleAuth_Backend.Models.GoogleRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
+    "Method": "GoogleAuth",
+    "RelativePath": "api/auth/google-register",
     "HttpMethod": "POST",
     "IsController": true,
     "Order": 0,
@@ -24,8 +40,8 @@
     "Order": 0,
     "Parameters": [
       {
-        "Name": "request",
-        "Type": "GoogleAuth_Backend.Models.RegisterRequest",
+        "Name": "inputCifrado",
+        "Type": "GoogleAuth_Backend.Models.ReciboSeguro",
         "IsRequired": true
       }
     ],

@@ -1,9 +1,6 @@
 ﻿namespace GoogleAuth_Backend.Models
 {
-    
-    
-
-    public class UsuarioSimulado
+    public class RegisterRequest
     {
         public string Nombre { get; set; }
         public string Apellido { get; set; }

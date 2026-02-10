@@ -1,33 +1,5 @@
 [
   {
-    "Nombre": "mendivil",
-    "Apellido": "",
-    "Email": "josentoio@hamil.com",
-    "Telefono": "",
-    "Password": "anto123"
-  },
-  {
-    "Nombre": null,
-    "Apellido": "",
-    "Email": "hh@gmail.com",
-    "Telefono": "",
-    "Password": null
-  },
-  {
-    "Nombre": "anto",
-    "Apellido": "",
-    "Email": "joseanto@gmail.com",
-    "Telefono": "",
-    "Password": "antonio04"
-  },
-  {
-    "Nombre": null,
-    "Apellido": "",
-    "Email": "locosxd@gmail.com",
-    "Telefono": "",
-    "Password": null
-  },
-  {
     "Nombre": "antonio",
     "Apellido": "Mendivil",
     "Email": "joseantonio@gmail.com",
@@ -68,5 +40,61 @@
     "Email": "rbd@gmail.com",
     "Telefono": "6444886622",
     "Password": "12345678"
+  },
+  {
+    "Nombre": "Antonio",
+    "Apellido": "Berrelleza",
+    "Email": "berrellezantonio04@gmail.com",
+    "Telefono": "",
+    "Password": "GOOGLE_USER"
+  },
+  {
+    "Nombre": "Jose Antonio",
+    "Apellido": "Berrelleza",
+    "Email": "joseantonioberrelleza7@gmail.com",
+    "Telefono": "",
+    "Password": "GOOGLE_USER"
+  },
+  {
+    "Nombre": "marco",
+    "Apellido": "antonio",
+    "Email": "mqrco@gmail.com",
+    "Telefono": "6444334455",
+    "Password": "12345"
+  },
+  {
+    "Nombre": "jose",
+    "Apellido": "solis",
+    "Email": "marc@gmail.com",
+    "Telefono": "6444556699",
+    "Password": "12345"
+  },
+  {
+    "Nombre": "marcorejil",
+    "Apellido": "solis",
+    "Email": "jj@gmail.com",
+    "Telefono": "6444556677",
+    "Password": "12345"
+  },
+  {
+    "Nombre": "alonso",
+    "Apellido": "medina",
+    "Email": "med@gmail.com",
+    "Telefono": "6442879400",
+    "Password": "123456789"
+  },
+  {
+    "Nombre": "miguel",
+    "Apellido": "flores",
+    "Email": "mg@gmail.com",
+    "Telefono": "6442869455",
+    "Password": "12345678"
+  },
+  {
+    "Nombre": "miguel",
+    "Apellido": "alonso",
+    "Email": "al@gmail.com",
+    "Telefono": "6444556677",
+    "Password": "123456"
   }
 ]

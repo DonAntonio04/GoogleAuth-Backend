@@ -1,12 +1,25 @@
-﻿using Google.Apis.Auth;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using GoogleAuth_Backend.Models; 
+using System.IO;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System;
+using RegisterRequest = GoogleAuth_Backend.Models.RegisterRequest;
+using GoogleRequest = GoogleAuth_Backend.Models.GoogleRequest;
+using ReciboSeguro = GoogleAuth_Backend.Models.ReciboSeguro;
+using Google.Apis.Auth; 
+
+using GoogleAuth.Models;
+using GoogleAuth_Backend.Models;
+
+
+using UsuarioSimulado = GoogleAuth.Models.UsuarioSimulado;
 
 namespace GoogleAuth_Backend.Controllers
 {
@@ -16,41 +29,56 @@ namespace GoogleAuth_Backend.Controllers
     {
         private readonly IConfiguration _config;
         private const string RUTA_ARCHIVO = "usuarios.json";
-        private const string SecretKeyDecrypt = "k3P9zR7mW2vL5xN8\r\n\r\n";
+
+        private const string SecretKeyDecrypt = "k3P9zR7mW2vL5xN8";
 
         public AuthController(IConfiguration config)
         {
             _config = config;
         }
 
-        // Endpoint para Registro Local
+       
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        public async Task<IActionResult> Register([FromBody] ReciboSeguro inputCifrado)
         {
-            var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
-            var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
-
-            if (usuarios.Any(u => u.Email == request.Email))
-                return BadRequest(new { Error = "El correo ya existe." });
-
-            string passwordLimpio = DecryptPassword(request.Password);
-
-            usuarios.Add(new UsuarioSimulado
+            try
             {
-                Nombre = request.Nombre,
-                Email = request.Email,
-                Apellido = request.Apellido,
-                Telefono = request.Telefono,
-                Password = passwordLimpio
-            });
+                
+                string jsonDecifrado = DecryptGeneral(inputCifrado.Data);
 
-            await System.IO.File.WriteAllTextAsync(RUTA_ARCHIVO, JsonSerializer.Serialize(usuarios, new JsonSerializerOptions { WriteIndented = true }));
-            return Ok(new { Message = "Usuario registrado." });
+                var request = JsonSerializer.Deserialize<RegisterRequest>(jsonDecifrado, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
+                var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
+
+                if (usuarios.Any(u => u.Email == request.Email))
+                    return BadRequest(new { Error = "El correo ya existe." });
+
+                usuarios.Add(new UsuarioSimulado
+                {
+                    Nombre = request.Nombre,
+                    Email = request.Email,
+                    Apellido = request.Apellido,
+                    Telefono = request.Telefono,
+                    Password = request.Password
+                });
+
+                await System.IO.File.WriteAllTextAsync(RUTA_ARCHIVO, JsonSerializer.Serialize(usuarios, new JsonSerializerOptions { WriteIndented = true }));
+                return Ok(new { Message = "Usuario registrado." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Error = "Error de seguridad o datos inválidos", Detalle = ex.Message });
+            }
         }
 
-        // Endpoint para Google
+     
         [HttpPost("google-login")]
-        public async Task<IActionResult> GoogleLogin([FromBody] GoogleRequest request)
+        [HttpPost("google-register")]
+        public async Task<IActionResult> GoogleAuth([FromBody] GoogleRequest request)
         {
             try
             {
@@ -60,10 +88,33 @@ namespace GoogleAuth_Backend.Controllers
                 };
 
                 var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+                var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
+                var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
+
+                var usuarioExistente = usuarios.FirstOrDefault(u => u.Email == payload.Email);
+
+                if (usuarioExistente == null)
+                {
+                    usuarioExistente = new UsuarioSimulado
+                    {
+                        Nombre = payload.GivenName,
+                        Apellido = payload.FamilyName,
+                        Email = payload.Email,
+                        Telefono = "",
+                        Password = "GOOGLE_USER"
+                    };
+                    usuarios.Add(usuarioExistente);
+                    await System.IO.File.WriteAllTextAsync(RUTA_ARCHIVO, JsonSerializer.Serialize(usuarios, new JsonSerializerOptions { WriteIndented = true }));
+                }
 
                 var token = GenerarJwtToken(payload.Name, payload.Email);
 
-                return Ok(new { Token = token, UserName = payload.Name });
+                return Ok(new
+                {
+                    Token = token,
+                    UserName = payload.Name,
+                    Email = payload.Email
+                });
             }
             catch (Exception ex)
             {
@@ -71,7 +122,7 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-     
+  
 
         private string GenerarJwtToken(string nombre, string email)
         {
@@ -90,9 +141,10 @@ namespace GoogleAuth_Backend.Controllers
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        private string DecryptPassword(string cipherText)
+       
+        private string DecryptGeneral(string cipherText)
         {
-            if (string.IsNullOrEmpty(cipherText)) return cipherText;
+            if (string.IsNullOrEmpty(cipherText)) return "{}";
 
             try
             {
@@ -104,20 +156,20 @@ namespace GoogleAuth_Backend.Controllers
                     aes.Mode = CipherMode.ECB;
                     aes.Padding = PaddingMode.PKCS7;
 
-                    ICryptoTransform decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-
-                    using (MemoryStream ms = new MemoryStream(cipherBytes))
-                    using (CryptoStream cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read))
-                    using (StreamReader sr = new StreamReader(cs))
+                    using (var descifrador = aes.CreateDecryptor())
                     {
-                        return sr.ReadToEnd();
+                        byte[] resultado = descifrador.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
+                        return Encoding.UTF8.GetString(resultado);
                     }
                 }
             }
             catch
             {
-                return cipherText;
+                return "{}";
             }
         }
     }
+
+  
+
 }
