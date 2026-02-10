@@ -1,7 +1,7 @@
 [
   {
     "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
-    "Method": "GoogleAuth",
+    "Method": "GoogleLogin",
     "RelativePath": "api/auth/google-login",
     "HttpMethod": "POST",
     "IsController": true,
@@ -17,7 +17,7 @@
   },
   {
     "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
-    "Method": "GoogleAuth",
+    "Method": "GoogleRegister",
     "RelativePath": "api/auth/google-register",
     "HttpMethod": "POST",
     "IsController": true,

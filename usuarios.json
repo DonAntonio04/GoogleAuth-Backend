@@ -42,20 +42,6 @@
     "Password": "12345678"
   },
   {
-    "Nombre": "Antonio",
-    "Apellido": "Berrelleza",
-    "Email": "berrellezantonio04@gmail.com",
-    "Telefono": "",
-    "Password": "GOOGLE_USER"
-  },
-  {
-    "Nombre": "Jose Antonio",
-    "Apellido": "Berrelleza",
-    "Email": "joseantonioberrelleza7@gmail.com",
-    "Telefono": "",
-    "Password": "GOOGLE_USER"
-  },
-  {
     "Nombre": "marco",
     "Apellido": "antonio",
     "Email": "mqrco@gmail.com",
@@ -96,5 +82,12 @@
     "Email": "al@gmail.com",
     "Telefono": "6444556677",
     "Password": "123456"
+  },
+  {
+    "Nombre": "Jose Antonio",
+    "Apellido": "Berrelleza",
+    "Email": "joseantonioberrelleza7@gmail.com",
+    "Telefono": "",
+    "Password": "GOOGLE_USER"
   }
 ]

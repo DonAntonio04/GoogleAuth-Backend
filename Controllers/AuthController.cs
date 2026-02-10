@@ -75,19 +75,25 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-     
+
+        // Mantenemos el método común para validar el token y no repetir código
+        private async Task<GoogleJsonWebSignature.Payload> ValidarTokenGoogle(string idToken)
+        {
+            var settings = new GoogleJsonWebSignature.ValidationSettings()
+            {
+                Audience = new List<string> { _config["Authentication:Google:ClientId"] }
+            };
+            return await GoogleJsonWebSignature.ValidateAsync(idToken, settings);
+        }
+
+      
         [HttpPost("google-login")]
-        [HttpPost("google-register")]
-        public async Task<IActionResult> GoogleAuth([FromBody] GoogleRequest request)
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleRequest request)
         {
             try
             {
-                var settings = new GoogleJsonWebSignature.ValidationSettings()
-                {
-                    Audience = new List<string> { _config["Authentication:Google:ClientId"] }
-                };
+                var payload = await ValidarTokenGoogle(request.IdToken);
 
-                var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
                 var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
                 var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
 
@@ -95,16 +101,11 @@ namespace GoogleAuth_Backend.Controllers
 
                 if (usuarioExistente == null)
                 {
-                    usuarioExistente = new UsuarioSimulado
+                    return Unauthorized(new
                     {
-                        Nombre = payload.GivenName,
-                        Apellido = payload.FamilyName,
-                        Email = payload.Email,
-                        Telefono = "",
-                        Password = "GOOGLE_USER"
-                    };
-                    usuarios.Add(usuarioExistente);
-                    await System.IO.File.WriteAllTextAsync(RUTA_ARCHIVO, JsonSerializer.Serialize(usuarios, new JsonSerializerOptions { WriteIndented = true }));
+                        Error = "Usuario no registrado",
+                        Message = "Debes registrarte con Google antes de iniciar sesión."
+                    });
                 }
 
                 var token = GenerarJwtToken(payload.Name, payload.Email);
@@ -112,17 +113,54 @@ namespace GoogleAuth_Backend.Controllers
                 return Ok(new
                 {
                     Token = token,
-                    UserName = payload.Name,
-                    Email = payload.Email
+                    UserName = usuarioExistente.Nombre,
+                    Email = usuarioExistente.Email
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { Error = "Token de Google inválido", Details = ex.Message });
+                return BadRequest(new { Error = "Token inválido", Details = ex.Message });
             }
         }
 
-  
+       
+        [HttpPost("google-register")]
+        public async Task<IActionResult> GoogleRegister([FromBody] GoogleRequest request)
+        {
+            try
+            {
+                var payload = await ValidarTokenGoogle(request.IdToken);
+
+                var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
+                var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
+
+               
+                if (usuarios.Any(u => u.Email == payload.Email))
+                {
+                    return BadRequest(new { Error = "El usuario ya está registrado. Por favor, inicia sesión." });
+                }
+
+                var nuevoUsuario = new UsuarioSimulado
+                {
+                    Nombre = payload.GivenName,
+                    Apellido = payload.FamilyName,
+                    Email = payload.Email,
+                    Telefono = "",
+                    Password = "GOOGLE_USER" 
+                };
+
+                usuarios.Add(nuevoUsuario);
+                await System.IO.File.WriteAllTextAsync(RUTA_ARCHIVO, JsonSerializer.Serialize(usuarios, new JsonSerializerOptions { WriteIndented = true }));
+
+                var token = GenerarJwtToken(payload.Name, payload.Email);
+                return Ok(new { Message = "Usuario registrado correctamente", Token = token });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Error = "Error en el registro con Google", Details = ex.Message });
+            }
+        }
+
 
         private string GenerarJwtToken(string nombre, string email)
         {
@@ -165,6 +203,7 @@ namespace GoogleAuth_Backend.Controllers
             }
             catch
             {
+                // Si falla, devolvemos un JSON vacío para que falle controladamente arriba
                 return "{}";
             }
         }
