@@ -33,6 +33,22 @@
   },
   {
     "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
+    "Method": "Login",
+    "RelativePath": "api/auth/local-login",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "GoogleAuth_Backend.Models.LoginRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
     "Method": "Register",
     "RelativePath": "api/auth/register",
     "HttpMethod": "POST",

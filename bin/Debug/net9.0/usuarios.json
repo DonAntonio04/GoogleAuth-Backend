@@ -89,5 +89,19 @@
     "Email": "joseantonioberrelleza7@gmail.com",
     "Telefono": "",
     "Password": "GOOGLE_USER"
+  },
+  {
+    "Nombre": "Antonio",
+    "Apellido": "Berrelleza",
+    "Email": "berrellezantonio04@gmail.com",
+    "Telefono": "",
+    "Password": "GOOGLE_USER"
+  },
+  {
+    "Nombre": "qq",
+    "Apellido": "qq",
+    "Email": "qq",
+    "Telefono": "123456789",
+    "Password": "qwerty"
   }
 ]

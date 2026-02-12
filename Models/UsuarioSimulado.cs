@@ -1,20 +1,20 @@
-﻿    namespace GoogleAuth.Models
+﻿namespace GoogleAuth.Models
+{
+    public class UsuarioSimulado
     {
-        public class UsuarioSimulado
-        {
-            public string Nombre { get; set; } = string.Empty;
-            public string Apellido { get; set; } = string.Empty;
-            public string Email { get; set; } = string.Empty;
-            public string Telefono { get; set; } = string.Empty;
-            public string Password { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public string Apellido { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Telefono { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
 
-      
-        }
 
-        public class ReciboSeguro
-        {
-            public string Data { get; set; }
-        }
+    }
+
+    public class ReciboSeguro
+    {
+        public string Data { get; set; }
+    }
 
     // Este modelo sirve para recibir los datos DESPUÉS de descifrar
     public class RegisterRequest

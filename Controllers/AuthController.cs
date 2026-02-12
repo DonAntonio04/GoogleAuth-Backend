@@ -1,24 +1,23 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Google.Apis.Auth;
+using GoogleAuth.Models;
+using GoogleAuth_Backend.Models;
+using Microsoft.AspNetCore.Identity.Data;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using System;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
+using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.IO;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using System;
-using RegisterRequest = GoogleAuth_Backend.Models.RegisterRequest;
 using GoogleRequest = GoogleAuth_Backend.Models.GoogleRequest;
 using ReciboSeguro = GoogleAuth_Backend.Models.ReciboSeguro;
-using Google.Apis.Auth; 
-
-using GoogleAuth.Models;
-using GoogleAuth_Backend.Models;
-
-
+using RegisterRequest = GoogleAuth_Backend.Models.RegisterRequest;
+using LoginRequest = GoogleAuth_Backend.Models.LoginRequest;
 using UsuarioSimulado = GoogleAuth.Models.UsuarioSimulado;
 
 namespace GoogleAuth_Backend.Controllers
@@ -37,13 +36,13 @@ namespace GoogleAuth_Backend.Controllers
             _config = config;
         }
 
-       
+
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] ReciboSeguro inputCifrado)
         {
             try
             {
-                
+
                 string jsonDecifrado = DecryptGeneral(inputCifrado.Data);
 
                 var request = JsonSerializer.Deserialize<RegisterRequest>(jsonDecifrado, new JsonSerializerOptions
@@ -74,9 +73,37 @@ namespace GoogleAuth_Backend.Controllers
                 return BadRequest(new { Error = "Error de seguridad o datos inválidos", Detalle = ex.Message });
             }
         }
+        [HttpPost("local-login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        {
+            try
+            {
+                var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
+                var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
 
+           
+                var usuario = usuarios.FirstOrDefault(u => u.Email == request.Email && u.Password == request.Password);
 
-        // Mantenemos el método común para validar el token y no repetir código
+                if (usuario == null)
+                {
+                    return Unauthorized(new { Error = "Credenciales incorrectas", Message = "Correo o contraseña no válidos." });
+                }
+
+                var token = GenerarJwtToken(usuario.Nombre, usuario.Email);
+
+                return Ok(new
+                {
+                    Token = token,
+                    UserName = usuario.Nombre,
+                    Email = usuario.Email
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Error = "Error al iniciar sesión", Details = ex.Message });
+            }
+        }
+
         private async Task<GoogleJsonWebSignature.Payload> ValidarTokenGoogle(string idToken)
         {
             var settings = new GoogleJsonWebSignature.ValidationSettings()
@@ -86,7 +113,7 @@ namespace GoogleAuth_Backend.Controllers
             return await GoogleJsonWebSignature.ValidateAsync(idToken, settings);
         }
 
-      
+
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleRequest request)
         {
@@ -123,7 +150,7 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-       
+
         [HttpPost("google-register")]
         public async Task<IActionResult> GoogleRegister([FromBody] GoogleRequest request)
         {
@@ -134,7 +161,7 @@ namespace GoogleAuth_Backend.Controllers
                 var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
                 var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
 
-               
+
                 if (usuarios.Any(u => u.Email == payload.Email))
                 {
                     return BadRequest(new { Error = "El usuario ya está registrado. Por favor, inicia sesión." });
@@ -146,7 +173,7 @@ namespace GoogleAuth_Backend.Controllers
                     Apellido = payload.FamilyName,
                     Email = payload.Email,
                     Telefono = "",
-                    Password = "GOOGLE_USER" 
+                    Password = "GOOGLE_USER"
                 };
 
                 usuarios.Add(nuevoUsuario);
@@ -179,7 +206,7 @@ namespace GoogleAuth_Backend.Controllers
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-       
+
         private string DecryptGeneral(string cipherText)
         {
             if (string.IsNullOrEmpty(cipherText)) return "{}";
@@ -203,12 +230,8 @@ namespace GoogleAuth_Backend.Controllers
             }
             catch
             {
-                // Si falla, devolvemos un JSON vacío para que falle controladamente arriba
                 return "{}";
             }
         }
     }
-
-  
-
 }

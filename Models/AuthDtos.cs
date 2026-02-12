@@ -1,8 +1,5 @@
 ﻿namespace GoogleAuth_Backend.Models
 {
-    
-    
-
     public class UsuarioSimulado
     {
         public string Nombre { get; set; }
