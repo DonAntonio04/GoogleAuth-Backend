@@ -1,19 +1,14 @@
 ﻿using Google.Apis.Auth;
 using GoogleAuth.Models;
 using GoogleAuth_Backend.Models;
-using Microsoft.AspNetCore.Identity.Data;
+using GoogleAuth_Backend.Services; // <--- Importamos el servicio
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
-using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using System.IO;
-using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using GoogleRequest = GoogleAuth_Backend.Models.GoogleRequest;
 using ReciboSeguro = GoogleAuth_Backend.Models.ReciboSeguro;
 using RegisterRequest = GoogleAuth_Backend.Models.RegisterRequest;
@@ -27,22 +22,22 @@ namespace GoogleAuth_Backend.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IConfiguration _config;
+        private readonly IGoogleAuthService _googleService; // <--- Inyección del servicio
         private const string RUTA_ARCHIVO = "usuarios.json";
-
         private const string SecretKeyDecrypt = "k3P9zR7mW2vL5xN8";
 
-        public AuthController(IConfiguration config)
+        // Constructor actualizado
+        public AuthController(IConfiguration config, IGoogleAuthService googleService)
         {
             _config = config;
+            _googleService = googleService;
         }
-
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] ReciboSeguro inputCifrado)
         {
             try
             {
-
                 string jsonDecifrado = DecryptGeneral(inputCifrado.Data);
 
                 var request = JsonSerializer.Deserialize<RegisterRequest>(jsonDecifrado, new JsonSerializerOptions
@@ -73,6 +68,7 @@ namespace GoogleAuth_Backend.Controllers
                 return BadRequest(new { Error = "Error de seguridad o datos inválidos", Detalle = ex.Message });
             }
         }
+
         [HttpPost("local-login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
@@ -81,7 +77,6 @@ namespace GoogleAuth_Backend.Controllers
                 var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
                 var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
 
-           
                 var usuario = usuarios.FirstOrDefault(u => u.Email == request.Email && u.Password == request.Password);
 
                 if (usuario == null)
@@ -104,22 +99,14 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-        private async Task<GoogleJsonWebSignature.Payload> ValidarTokenGoogle(string idToken)
-        {
-            var settings = new GoogleJsonWebSignature.ValidationSettings()
-            {
-                Audience = new List<string> { _config["Authentication:Google:ClientId"] }
-            };
-            return await GoogleJsonWebSignature.ValidateAsync(idToken, settings);
-        }
-
-
+        // --- LOGIN CON GOOGLE ---
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleRequest request)
         {
             try
             {
-                var payload = await ValidarTokenGoogle(request.IdToken);
+                // Usamos el servicio inyectado
+                var payload = await _googleService.ValidarTokenGoogle(request.IdToken);
 
                 var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
                 var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
@@ -150,27 +137,28 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-
+        // --- REGISTRO CON GOOGLE ---
         [HttpPost("google-register")]
         public async Task<IActionResult> GoogleRegister([FromBody] GoogleRequest request)
         {
             try
             {
-                var payload = await ValidarTokenGoogle(request.IdToken);
+                // Usamos el servicio inyectado
+                var payload = await _googleService.ValidarTokenGoogle(request.IdToken);
 
                 var json = System.IO.File.Exists(RUTA_ARCHIVO) ? await System.IO.File.ReadAllTextAsync(RUTA_ARCHIVO) : "[]";
                 var usuarios = JsonSerializer.Deserialize<List<UsuarioSimulado>>(json) ?? new();
-
 
                 if (usuarios.Any(u => u.Email == payload.Email))
                 {
                     return BadRequest(new { Error = "El usuario ya está registrado. Por favor, inicia sesión." });
                 }
 
+                // Creamos el usuario (con manejo de nulos por seguridad)
                 var nuevoUsuario = new UsuarioSimulado
                 {
-                    Nombre = payload.GivenName,
-                    Apellido = payload.FamilyName,
+                    Nombre = payload.GivenName ?? "Usuario Google",
+                    Apellido = payload.FamilyName ?? "",
                     Email = payload.Email,
                     Telefono = "",
                     Password = "GOOGLE_USER"
@@ -188,7 +176,6 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-
         private string GenerarJwtToken(string nombre, string email)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
@@ -205,7 +192,6 @@ namespace GoogleAuth_Backend.Controllers
             );
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
-
 
         private string DecryptGeneral(string cipherText)
         {
