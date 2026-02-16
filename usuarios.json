@@ -1,75 +1,5 @@
 [
   {
-    "Nombre": "antonio",
-    "Apellido": "Mendivil",
-    "Email": "joseantonio@gmail.com",
-    "Telefono": "123456789",
-    "Password": "antonio"
-  },
-  {
-    "Nombre": "juan",
-    "Apellido": "perez",
-    "Email": "jjkaise@gmail.com",
-    "Telefono": "6444556677",
-    "Password": "123456789"
-  },
-  {
-    "Nombre": "abc",
-    "Apellido": "def",
-    "Email": "abc@gmail.com",
-    "Telefono": "6444556677",
-    "Password": "123"
-  },
-  {
-    "Nombre": "efg",
-    "Apellido": "hij",
-    "Email": "efg@gmail.com",
-    "Telefono": "6442556622",
-    "Password": "12345"
-  },
-  {
-    "Nombre": "hjd",
-    "Apellido": "ssss",
-    "Email": "sssss",
-    "Telefono": "1234567890",
-    "Password": "antoinb"
-  },
-  {
-    "Nombre": "rbd",
-    "Apellido": "ajua",
-    "Email": "rbd@gmail.com",
-    "Telefono": "6444886622",
-    "Password": "12345678"
-  },
-  {
-    "Nombre": "marco",
-    "Apellido": "antonio",
-    "Email": "mqrco@gmail.com",
-    "Telefono": "6444334455",
-    "Password": "12345"
-  },
-  {
-    "Nombre": "jose",
-    "Apellido": "solis",
-    "Email": "marc@gmail.com",
-    "Telefono": "6444556699",
-    "Password": "12345"
-  },
-  {
-    "Nombre": "marcorejil",
-    "Apellido": "solis",
-    "Email": "jj@gmail.com",
-    "Telefono": "6444556677",
-    "Password": "12345"
-  },
-  {
-    "Nombre": "alonso",
-    "Apellido": "medina",
-    "Email": "med@gmail.com",
-    "Telefono": "6442879400",
-    "Password": "123456789"
-  },
-  {
     "Nombre": "miguel",
     "Apellido": "flores",
     "Email": "mg@gmail.com",
@@ -110,27 +40,6 @@
     "Email": "zzzzzzzzz",
     "Telefono": "123456789",
     "Password": "qee"
-  },
-  {
-    "Nombre": "qwert",
-    "Apellido": "wert",
-    "Email": "test.pruba",
-    "Telefono": "123456",
-    "Password": "ade"
-  },
-  {
-    "Nombre": null,
-    "Apellido": null,
-    "Email": null,
-    "Telefono": null,
-    "Password": null
-  },
-  {
-    "Nombre": "xadasdasda",
-    "Apellido": "dsadasdasdadas",
-    "Email": "aaaaaaaajj@gmail.com",
-    "Telefono": "64445553322",
-    "Password": "12345678"
   },
   {
     "Nombre": "Rigoberto",

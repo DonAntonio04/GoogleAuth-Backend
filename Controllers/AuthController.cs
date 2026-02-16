@@ -1,7 +1,7 @@
 ﻿using Google.Apis.Auth;
 using GoogleAuth.Models;
 using GoogleAuth_Backend.Models;
-using GoogleAuth_Backend.Services; // <--- Importamos el servicio
+using GoogleAuth_Backend.Services; 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -99,7 +99,7 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-        // --- LOGIN CON GOOGLE ---
+        // EndpOint para inicio de sesion con Google
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleRequest request)
         {
@@ -137,7 +137,7 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-        // --- REGISTRO CON GOOGLE ---
+        // EndPoint de registro con google
         [HttpPost("google-register")]
         public async Task<IActionResult> GoogleRegister([FromBody] GoogleRequest request)
         {
