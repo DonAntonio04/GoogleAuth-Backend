@@ -22,7 +22,8 @@ namespace GoogleAuth_Backend.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IConfiguration _config;
-        private readonly IGoogleAuthService _googleService; // <--- Inyección del servicio
+        private readonly IGoogleAuthService _googleService;
+        private const string RUTA_TOKENS_REVOCADOS = "tokens_revocados.json";
         private const string RUTA_ARCHIVO = "usuarios.json";
         private const string SecretKeyDecrypt = "k3P9zR7mW2vL5xN8";
 
@@ -99,7 +100,7 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-        // EndpOint para inicio de sesion con Google
+        // Endpoint para inicio de sesion con Google
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleRequest request)
         {
@@ -175,7 +176,41 @@ namespace GoogleAuth_Backend.Controllers
                 return BadRequest(new { Error = "Error en el registro con Google", Details = ex.Message });
             }
         }
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.Token))
+                {
+                    return BadRequest(new { Error = "El token es requerido." });
+                }
 
+                var json = System.IO.File.Exists(RUTA_TOKENS_REVOCADOS)
+                           ? await System.IO.File.ReadAllTextAsync(RUTA_TOKENS_REVOCADOS)
+                           : "[]";
+
+                var tokensRevocados = JsonSerializer.Deserialize<List<string>>(json) ?? new();
+
+                if (!tokensRevocados.Contains(request.Token))
+                {
+                    tokensRevocados.Add(request.Token);
+
+                    await System.IO.File.WriteAllTextAsync(
+                        RUTA_TOKENS_REVOCADOS,
+                        JsonSerializer.Serialize(tokensRevocados, new JsonSerializerOptions { WriteIndented = true })
+                    );
+                }
+
+                Console.WriteLine($"Token revocado y guardado: {request.Token.Substring(0, 15)}...");
+
+                return Ok(new { Message = "Sesión cerrada correctamente en el servidor." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = "Error al procesar logout", Details = ex.Message });
+            }
+        }
         private string GenerarJwtToken(string nombre, string email)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));

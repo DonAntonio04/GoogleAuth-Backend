@@ -14,13 +14,6 @@
     "Password": "123456"
   },
   {
-    "Nombre": "Jose Antonio",
-    "Apellido": "Berrelleza",
-    "Email": "joseantonioberrelleza7@gmail.com",
-    "Telefono": "",
-    "Password": "GOOGLE_USER"
-  },
-  {
     "Nombre": "Antonio",
     "Apellido": "Berrelleza",
     "Email": "berrellezantonio04@gmail.com",
@@ -40,6 +33,13 @@
     "Email": "zzzzzzzzz",
     "Telefono": "123456789",
     "Password": "qee"
+  },
+  {
+    "Nombre": "Jose Antonio",
+    "Apellido": "Berrelleza",
+    "Email": "joseantonioberrelleza7@gmail.com",
+    "Telefono": "",
+    "Password": "GOOGLE_USER"
   },
   {
     "Nombre": "Rigoberto",
