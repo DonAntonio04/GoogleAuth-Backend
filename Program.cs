@@ -1,11 +1,13 @@
 using GoogleAuth_Backend.Services; // Asegúrate de que este namespace coincida con donde creaste el servicio
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 1. Configurar CORS
 var misOrigenesPermitidos = "PermitirColaborador";
 builder.Services.AddCors(options => {
     options.AddPolicy(name: misOrigenesPermitidos, policy => {
@@ -15,7 +17,6 @@ builder.Services.AddCors(options => {
     });
 });
 
-// 2. Configurar JWT
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -33,12 +34,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddControllers();
 
-// 3. REGISTRAR EL SERVICIO DE GOOGLE (¡Nuevo!)
 builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 
 var app = builder.Build();
 
-// Middleware para habilitar popups de Google en frontend
 app.Use((context, next) =>
 {
     context.Response.Headers.Append("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
