@@ -34,8 +34,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddControllers();
 
-builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 
+builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
+builder.Services.AddHttpClient();
 var app = builder.Build();
 
 app.Use((context, next) =>

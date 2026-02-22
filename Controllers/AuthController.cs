@@ -1,10 +1,10 @@
-﻿using Google.Apis.Auth;
-using GoogleAuth.Models;
+﻿using GoogleAuth.Models;
 using GoogleAuth_Backend.Models;
 using GoogleAuth_Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -22,17 +22,18 @@ namespace GoogleAuth_Backend.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IConfiguration _config;
-        private readonly IGoogleAuthService _googleService;
         private readonly AppDbContext _db;
+        private readonly IHttpClientFactory _httpClientFactory;
         private const string RUTA_TOKENS_REVOCADOS = "tokens_revocados.json";
         private const string SecretKeyDecrypt = "k3P9zR7mW2vL5xN8";
 
-        public AuthController(IConfiguration config, IGoogleAuthService googleService, AppDbContext db)
+        public AuthController(IConfiguration config, AppDbContext db, IHttpClientFactory httpClientFactory)
         {
             _config = config;
-            _googleService = googleService;
             _db = db;
+            _httpClientFactory = httpClientFactory;
         }
+
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] ReciboSeguro inputCifrado)
@@ -45,6 +46,9 @@ namespace GoogleAuth_Backend.Controllers
                 {
                     PropertyNameCaseInsensitive = true
                 });
+
+                if (request == null || string.IsNullOrEmpty(request.Email))
+                    return BadRequest(new { Error = "Datos inválidos." });
 
                 if (_db.Usuarios.Any(u => u.Email == request.Email))
                     return BadRequest(new { Error = "El correo ya existe." });
@@ -67,6 +71,7 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
+ 
         [HttpPost("local-login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
@@ -92,70 +97,147 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
+
         [HttpPost("google-auth")]
         public async Task<IActionResult> GoogleAuth([FromBody] GoogleRequest request)
         {
             try
             {
-                var payload = await _googleService.ValidarTokenGoogle(request.IdToken);
+                if (string.IsNullOrEmpty(request.AccessToken))
+                    return BadRequest(new { Error = "Se requiere el access_token de Google." });
 
-                if (payload == null)
-                    return BadRequest(new { Error = "El token de Google no es válido o ha expirado." });
+                var httpClient = _httpClientFactory.CreateClient();
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", request.AccessToken);
 
-                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == payload.Email);
+                var userInfoResponse = await httpClient.GetStringAsync(
+                    "https://www.googleapis.com/oauth2/v3/userinfo"
+                );
+                var userInfo = JsonDocument.Parse(userInfoResponse);
+
+                string email = userInfo.RootElement.TryGetProperty("email", out var em) ? em.GetString() ?? "" : "";
+                string nombre = userInfo.RootElement.TryGetProperty("given_name", out var gn) ? gn.GetString() ?? "" : "";
+                string apellido = userInfo.RootElement.TryGetProperty("family_name", out var fn) ? fn.GetString() ?? "" : "";
+
+                if (string.IsNullOrEmpty(email))
+                    return BadRequest(new { Error = "No se pudo obtener el email de Google." });
+
+                // Teléfono y fecha de nacimiento (People API) ──
+                string telefono = "";
+                string fechaNacimiento = "";
+                string peopleDebug = "";
+
+                try
+                {
+                    var peopleClient = _httpClientFactory.CreateClient();
+                    peopleClient.DefaultRequestHeaders.Authorization =
+                        new AuthenticationHeaderValue("Bearer", request.AccessToken);
+
+                    var peopleUrl = "https://people.googleapis.com/v1/people/me" +
+                                    "?personFields=phoneNumbers,birthdays" +
+                                    "&sources=READ_SOURCE_TYPE_PROFILE" +
+                                    "&sources=READ_SOURCE_TYPE_CONTACT";
+
+                    var peopleResponse = await peopleClient.GetStringAsync(peopleUrl);
+                    peopleDebug = peopleResponse;
+
+                    var peopleJson = JsonDocument.Parse(peopleResponse);
+
+                    // Teléfono — busca el marcado como primario, si no toma el primero
+                    if (peopleJson.RootElement.TryGetProperty("phoneNumbers", out var phones) &&
+                        phones.GetArrayLength() > 0)
+                    {
+                        foreach (var phone in phones.EnumerateArray())
+                        {
+                            if (phone.TryGetProperty("metadata", out var meta) &&
+                                meta.TryGetProperty("primary", out var primary) &&
+                                primary.GetBoolean())
+                            {
+                                telefono = phone.GetProperty("value").GetString() ?? "";
+                                break;
+                            }
+                        }
+
+                        if (string.IsNullOrEmpty(telefono))
+                            telefono = phones[0].GetProperty("value").GetString() ?? "";
+                    }
+
+                    // Fecha de nacimiento
+                    if (peopleJson.RootElement.TryGetProperty("birthdays", out var birthdays) &&
+                        birthdays.GetArrayLength() > 0)
+                    {
+                        foreach (var birthday in birthdays.EnumerateArray())
+                        {
+                            if (!birthday.TryGetProperty("date", out var date)) continue;
+
+                            int year = date.TryGetProperty("year", out var y) ? y.GetInt32() : 0;
+                            int month = date.TryGetProperty("month", out var m) ? m.GetInt32() : 0;
+                            int day = date.TryGetProperty("day", out var d) ? d.GetInt32() : 0;
+
+                            if (year > 0 && month > 0 && day > 0)
+                            {
+                                fechaNacimiento = $"{year}-{month:D2}-{day:D2}";
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch (Exception peopleEx)
+                {
+                    Console.WriteLine($"[People API Error]: {peopleEx.Message}");
+                    peopleDebug = peopleEx.Message;
+                }
+
+                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == email);
 
                 if (usuario == null)
                 {
                     usuario = new UsuarioSimulado
                     {
-                        Nombre = payload.GivenName ?? payload.Name ?? "Usuario Google",
-                        Apellido = payload.FamilyName ?? "",
-                        Email = payload.Email,
-                        Telefono = "",
+                        Nombre = nombre,
+                        Apellido = apellido,
+                        Email = email,
+                        Telefono = telefono,
                         Password = "GOOGLE_USER_AUTH"
                     };
-
                     _db.Usuarios.Add(usuario);
-                    await _db.SaveChangesAsync();
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(usuario.Telefono) && !string.IsNullOrEmpty(telefono))
+                        usuario.Telefono = telefono;
                 }
 
-                var token = GenerarJwtToken(usuario.Nombre, usuario.Email);
+                await _db.SaveChangesAsync();
+
+                var jwtToken = GenerarJwtToken(usuario.Nombre, usuario.Email);
 
                 return Ok(new
                 {
                     Message = "Autenticación exitosa",
-                    Token = token,
-                    User = new { usuario.Nombre, usuario.Email }
+                    Token = jwtToken,
+                    User = new
+                    {
+                        usuario.Nombre,
+                        usuario.Apellido,
+                        usuario.Email,
+                        usuario.Telefono,
+                        FechaNacimiento = fechaNacimiento,
+                        _PeopleDebug = peopleDebug  // ← quitar cuando confirmes que funciona
+                    }
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { Error = "Error procesando la autenticación", Details = ex.Message });
+                return BadRequest(new
+                {
+                    Error = "Error procesando la autenticación",
+                    Details = ex.Message,
+                    Inner = ex.InnerException?.Message
+                });
             }
         }
 
-        private string GenerarJwtToken(string nombre, string email)
-        {
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            var claims = new[]
-            {
-                new Claim(ClaimTypes.Name, nombre),
-                new Claim(ClaimTypes.Email, email),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            };
-
-            var token = new JwtSecurityToken(
-                issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.Now.AddDays(1),
-                signingCredentials: creds
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
 
         [HttpPost("logout")]
         public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
@@ -186,6 +268,30 @@ namespace GoogleAuth_Backend.Controllers
             {
                 return StatusCode(500, new { Error = "Error al procesar logout", Details = ex.Message });
             }
+        }
+
+ 
+        private string GenerarJwtToken(string nombre, string email)
+        {
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var claims = new[]
+            {
+                new Claim(ClaimTypes.Name,  nombre),
+                new Claim(ClaimTypes.Email, email),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
+
+            var token = new JwtSecurityToken(
+                issuer: _config["Jwt:Issuer"],
+                audience: _config["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.Now.AddDays(1),
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
         private string DecryptGeneral(string cipherText)

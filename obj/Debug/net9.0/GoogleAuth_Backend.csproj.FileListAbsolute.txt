@@ -93,3 +93,4 @@ C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\Mic
 C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\Microsoft.EntityFrameworkCore.Abstractions.dll
 C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\Microsoft.EntityFrameworkCore.Relational.dll
 C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\Microsoft.EntityFrameworkCore.SqlServer.dll
+C:\Users\hp\Documents\GoogleAuth_Backend\GoogleAuth_Backend\bin\Debug\net9.0\tokens_revocados.json
