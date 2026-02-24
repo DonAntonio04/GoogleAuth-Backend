@@ -5,14 +5,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
+using System.Numerics;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using GoogleRequest = GoogleAuth_Backend.Models.GoogleRequest;
-using ReciboSeguro = GoogleAuth_Backend.Models.ReciboSeguro;
-using RegisterRequest = GoogleAuth_Backend.Models.RegisterRequest;
 using LoginRequest = GoogleAuth_Backend.Models.LoginRequest;
+using RegisterRequest = GoogleAuth_Backend.Models.RegisterRequest;
 using UsuarioSimulado = GoogleAuth.Models.UsuarioSimulado;
 
 namespace GoogleAuth_Backend.Controllers
@@ -25,7 +25,8 @@ namespace GoogleAuth_Backend.Controllers
         private readonly AppDbContext _db;
         private readonly IHttpClientFactory _httpClientFactory;
         private const string RUTA_TOKENS_REVOCADOS = "tokens_revocados.json";
-        private const string SecretKeyDecrypt = "k3P9zR7mW2vL5xN8";
+
+        private const string SecretKey = "k3P9zR7mW2vL5xN8";
 
         public AuthController(IConfiguration config, AppDbContext db, IHttpClientFactory httpClientFactory)
         {
@@ -34,36 +35,54 @@ namespace GoogleAuth_Backend.Controllers
             _httpClientFactory = httpClientFactory;
         }
 
-
+  
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] ReciboSeguro inputCifrado)
+        public async Task<IActionResult> Register([FromBody] EncryptedPayload payload)
         {
             try
             {
-                string jsonDecifrado = DecryptGeneral(inputCifrado.Data);
+                if (payload == null || string.IsNullOrEmpty(payload.Data))
+                    return BadRequest(new { Error = "No se recibieron datos cifrados." });
 
-                var request = JsonSerializer.Deserialize<RegisterRequest>(jsonDecifrado, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                string jsonDescifrado = Decrypt(payload.Data); //punto de interrupcion
+
+                if (string.IsNullOrEmpty(jsonDescifrado))
+                    return BadRequest(new { Error = "La llave de encriptación no coincide o los datos están corruptos." });
+
+                var request = JsonSerializer.Deserialize<RegisterRequest>(
+                    jsonDescifrado,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
 
                 if (request == null || string.IsNullOrEmpty(request.Email))
-                    return BadRequest(new { Error = "Datos inválidos." });
+                    return BadRequest(new { Error = "Datos inválidos o el correo está vacío." });
 
                 if (_db.Usuarios.Any(u => u.Email == request.Email))
                     return BadRequest(new { Error = "El correo ya existe." });
 
+                string passwordHash = HashPassword(request.Password);
+
                 _db.Usuarios.Add(new UsuarioSimulado
                 {
                     Nombre = request.Nombre,
-                    Email = request.Email,
                     Apellido = request.Apellido,
+                    Email = request.Email,
                     Telefono = request.Telefono,
-                    Password = request.Password
+                    Password = passwordHash
                 });
 
                 await _db.SaveChangesAsync();
-                return Ok(new { Message = "Usuario registrado." });
+
+                var respuestaObj = new
+                {
+                    Message = "Usuario registrado exitosamente.",
+                    Email = request.Email,
+                    Nombre = request.Nombre
+                };
+
+                string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
+
+                return Ok(new { Data = respuestaCifrada });
             }
             catch (Exception ex)
             {
@@ -71,33 +90,60 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
- 
-        [HttpPost("local-login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] EncryptedPayload payload)
         {
             try
             {
-                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == request.Email && u.Password == request.Password);
+                if (payload == null || string.IsNullOrEmpty(payload.                                                                                                         Data))
+                    return BadRequest(new { Error = "No se recibieron credenciales cifradas." });
+
+                string jsonDescifrado = Decrypt(payload.Data);
+
+                if (string.IsNullOrEmpty(jsonDescifrado))
+                    return BadRequest(new { Error = "Error al descifrar las credenciales." });
+
+                var request = JsonSerializer.Deserialize<LoginRequest>(
+                    jsonDescifrado,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+
+                if (request == null || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+                    return BadRequest(new { Error = "Datos incompletos." });
+
+                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == request.Email);
 
                 if (usuario == null)
-                    return Unauthorized(new { Error = "Credenciales incorrectas", Message = "Correo o contraseña no válidos." });
+                    return Unauthorized(new { Error = "Correo o contraseña incorrectos." });
 
-                var token = GenerarJwtToken(usuario.Nombre, usuario.Email);
+                string passwordHashIntento = HashPassword(request.Password);
 
-                return Ok(new
+                if (usuario.Password != passwordHashIntento)
+                    return Unauthorized(new { Error = "Correo o contraseña incorrectos." });
+
+                var jwtToken = GenerarJwtToken(usuario.Nombre, usuario.Email);
+
+                var respuestaObj = new
                 {
-                    Token = token,
-                    UserName = usuario.Nombre,
-                    Email = usuario.Email
-                });
+                    Token = jwtToken,
+                    Nombre = usuario.Nombre,
+                    Apellido = usuario.Apellido,
+                    Email = usuario.Email,
+                    Telefono = usuario.Telefono,
+
+                };
+
+                string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
+
+                return Ok(new { Data = respuestaCifrada });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { Error = "Error al iniciar sesión", Details = ex.Message });
+                return BadRequest(new { Error = "Error procesando el login", Detalle = ex.Message });
             }
         }
 
-
+      
         [HttpPost("google-auth")]
         public async Task<IActionResult> GoogleAuth([FromBody] GoogleRequest request)
         {
@@ -122,10 +168,8 @@ namespace GoogleAuth_Backend.Controllers
                 if (string.IsNullOrEmpty(email))
                     return BadRequest(new { Error = "No se pudo obtener el email de Google." });
 
-                // Teléfono y fecha de nacimiento (People API) ──
                 string telefono = "";
                 string fechaNacimiento = "";
-                string peopleDebug = "";
 
                 try
                 {
@@ -133,17 +177,10 @@ namespace GoogleAuth_Backend.Controllers
                     peopleClient.DefaultRequestHeaders.Authorization =
                         new AuthenticationHeaderValue("Bearer", request.AccessToken);
 
-                    var peopleUrl = "https://people.googleapis.com/v1/people/me" +
-                                    "?personFields=phoneNumbers,birthdays" +
-                                    "&sources=READ_SOURCE_TYPE_PROFILE" +
-                                    "&sources=READ_SOURCE_TYPE_CONTACT";
-
+                    var peopleUrl = "https://people.googleapis.com/v1/people/me?personFields=phoneNumbers,birthdays";
                     var peopleResponse = await peopleClient.GetStringAsync(peopleUrl);
-                    peopleDebug = peopleResponse;
-
                     var peopleJson = JsonDocument.Parse(peopleResponse);
 
-                    // Teléfono — busca el marcado como primario, si no toma el primero
                     if (peopleJson.RootElement.TryGetProperty("phoneNumbers", out var phones) &&
                         phones.GetArrayLength() > 0)
                     {
@@ -162,7 +199,6 @@ namespace GoogleAuth_Backend.Controllers
                             telefono = phones[0].GetProperty("value").GetString() ?? "";
                     }
 
-                    // Fecha de nacimiento
                     if (peopleJson.RootElement.TryGetProperty("birthdays", out var birthdays) &&
                         birthdays.GetArrayLength() > 0)
                     {
@@ -185,7 +221,6 @@ namespace GoogleAuth_Backend.Controllers
                 catch (Exception peopleEx)
                 {
                     Console.WriteLine($"[People API Error]: {peopleEx.Message}");
-                    peopleDebug = peopleEx.Message;
                 }
 
                 var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == email);
@@ -198,7 +233,7 @@ namespace GoogleAuth_Backend.Controllers
                         Apellido = apellido,
                         Email = email,
                         Telefono = telefono,
-                        Password = "GOOGLE_USER_AUTH"
+                        Password = HashPassword(Guid.NewGuid().ToString())
                     };
                     _db.Usuarios.Add(usuario);
                 }
@@ -212,33 +247,33 @@ namespace GoogleAuth_Backend.Controllers
 
                 var jwtToken = GenerarJwtToken(usuario.Nombre, usuario.Email);
 
-                return Ok(new
+                var respuestaObj = new
                 {
                     Message = "Autenticación exitosa",
                     Token = jwtToken,
-                    User = new
-                    {
-                        usuario.Nombre,
-                        usuario.Apellido,
-                        usuario.Email,
-                        usuario.Telefono,
-                        FechaNacimiento = fechaNacimiento,
-                        _PeopleDebug = peopleDebug  // ← quitar cuando confirmes que funciona
-                    }
-                });
+                    Nombre = usuario.Nombre,
+                    Apellido = usuario.Apellido,
+                    Email = usuario.Email,
+                    Telefono = usuario.Telefono,
+                    FechaNacimiento = fechaNacimiento
+                };
+
+                string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
+
+                return Ok(new { Data = respuestaCifrada });
             }
             catch (Exception ex)
             {
                 return BadRequest(new
                 {
                     Error = "Error procesando la autenticación",
-                    Details = ex.Message,
+                    Detail = ex.Message,
                     Inner = ex.InnerException?.Message
                 });
             }
         }
 
-
+   
         [HttpPost("logout")]
         public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
         {
@@ -270,16 +305,76 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
- 
+        //Preparar la llave para encriptar y desencriptar
+        private byte[] DerivarLlaveAes()
+        {
+            byte[] llave16Bytes = Encoding.UTF8.GetBytes(SecretKey);
+            return llave16Bytes;
+        }
+
+        //Encriptamos 
+        private string Encrypt(string plainText)
+        {
+            using var aes = Aes.Create();
+            aes.Key = DerivarLlaveAes();
+            aes.Mode = CipherMode.ECB;
+            aes.Padding = PaddingMode.PKCS7;
+
+            byte[] inputBytes = Encoding.UTF8.GetBytes(plainText);
+            using var encryptor = aes.CreateEncryptor();
+            byte[] encryptedBytes = encryptor.TransformFinalBlock(inputBytes, 0, inputBytes.Length);
+
+            string base64Result = Convert.ToBase64String(encryptedBytes);
+            return base64Result;
+        }
+
+        private string? Decrypt(string cipherTextBase64)
+        {
+            try
+            {
+          
+                byte[] cipherBytes = Convert.FromBase64String(cipherTextBase64);
+
+                using var aes = Aes.Create();
+                aes.Key = DerivarLlaveAes();
+                aes.Mode = CipherMode.ECB;
+                aes.Padding = PaddingMode.PKCS7;
+
+                using var decryptor = aes.CreateDecryptor();
+                byte[] result = decryptor.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
+
+          
+                string json = Encoding.UTF8.GetString(result); //punto de interrupcion
+
+                JsonDocument.Parse(json); // Valida que sea JSON bien formado
+                return json;
+            }
+            catch (Exception ex)
+            {
+             
+                Console.WriteLine($"[Decrypt Error]: {ex.Message}"); //punto de interupcion
+                return null;
+            }
+        }
+
+        private string HashPassword(string password)
+        {
+            using var sha256 = SHA256.Create();
+
+            byte[] hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+             string hashResult = Convert.ToBase64String(hashBytes); //punto de interupcion
+            return hashResult;
+        }
+
         private string GenerarJwtToken(string nombre, string email)
         {
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
             {
-                new Claim(ClaimTypes.Name,  nombre),
-                new Claim(ClaimTypes.Email, email),
+                new Claim(ClaimTypes.Name,             nombre),
+                new Claim(ClaimTypes.Email,            email),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
@@ -291,34 +386,8 @@ namespace GoogleAuth_Backend.Controllers
                 signingCredentials: creds
             );
 
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
-
-        private string DecryptGeneral(string cipherText)
-        {
-            if (string.IsNullOrEmpty(cipherText)) return "{}";
-
-            try
-            {
-                byte[] cipherBytes = Convert.FromBase64String(cipherText);
-
-                using (Aes aes = Aes.Create())
-                {
-                    aes.Key = Encoding.UTF8.GetBytes(SecretKeyDecrypt);
-                    aes.Mode = CipherMode.ECB;
-                    aes.Padding = PaddingMode.PKCS7;
-
-                    using (var descifrador = aes.CreateDecryptor())
-                    {
-                        byte[] resultado = descifrador.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
-                        return Encoding.UTF8.GetString(resultado);
-                    }
-                }
-            }
-            catch
-            {
-                return "{}";
-            }
+            string tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+            return tokenString;
         }
     }
 }

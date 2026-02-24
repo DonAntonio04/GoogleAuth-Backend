@@ -1,14 +1,16 @@
-using GoogleAuth_Backend.Services; // Asegúrate de que este namespace coincida con donde creaste el servicio
+ï»¿using GoogleAuth_Backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var misOrigenesPermitidos = "PermitirColaborador";
+
 builder.Services.AddCors(options => {
     options.AddPolicy(name: misOrigenesPermitidos, policy => {
         policy.AllowAnyOrigin()
@@ -28,15 +30,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+            IssuerSigningKey = new SymmetricSecurityKey(
+                                           Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
     });
 
-builder.Services.AddControllers();
-
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
 
 builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddHttpClient();
+
 var app = builder.Build();
 
 app.Use((context, next) =>
@@ -46,10 +53,8 @@ app.Use((context, next) =>
 });
 
 app.UseCors(misOrigenesPermitidos);
-// app.UseHttpsRedirection(); // Mantenlo comentado mientras uses Tailscale/LAN sin SSL
+// app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();

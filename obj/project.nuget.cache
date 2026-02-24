@@ -1,11 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "XyAoBckgWIo=",
+  "dgSpecHash": "rlwNPR7sMS0=",
   "success": true,
   "projectFilePath": "C:\\Users\\hp\\Documents\\GoogleAuth_Backend\\GoogleAuth_Backend\\GoogleAuth_Backend.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\hp\\.nuget\\packages\\azure.core\\1.50.0\\azure.core.1.50.0.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\azure.identity\\1.17.1\\azure.identity.1.17.1.nupkg.sha512",
+    "C:\\Users\\hp\\.nuget\\packages\\bcrypt.net-next\\4.1.0\\bcrypt.net-next.4.1.0.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\google.apis\\1.73.0\\google.apis.1.73.0.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\google.apis.auth\\1.73.0\\google.apis.auth.1.73.0.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\google.apis.core\\1.73.0\\google.apis.core.1.73.0.nupkg.sha512",

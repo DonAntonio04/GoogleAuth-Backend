@@ -18,14 +18,14 @@
   {
     "ContainingType": "GoogleAuth_Backend.Controllers.AuthController",
     "Method": "Login",
-    "RelativePath": "api/auth/local-login",
+    "RelativePath": "api/auth/login",
     "HttpMethod": "POST",
     "IsController": true,
     "Order": 0,
     "Parameters": [
       {
-        "Name": "request",
-        "Type": "GoogleAuth_Backend.Models.LoginRequest",
+        "Name": "payload",
+        "Type": "GoogleAuth_Backend.Models.EncryptedPayload",
         "IsRequired": true
       }
     ],
@@ -56,8 +56,8 @@
     "Order": 0,
     "Parameters": [
       {
-        "Name": "inputCifrado",
-        "Type": "GoogleAuth_Backend.Models.ReciboSeguro",
+        "Name": "payload",
+        "Type": "GoogleAuth_Backend.Models.EncryptedPayload",
         "IsRequired": true
       }
     ],
