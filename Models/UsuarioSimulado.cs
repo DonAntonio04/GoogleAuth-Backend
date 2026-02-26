@@ -5,34 +5,37 @@ namespace GoogleAuth.Models
 {
     public class UsuarioSimulado
     {
-
-        public int Id { get; set; }
+        public string Id { get; set; }
         public string Nombre { get; set; } = string.Empty;
         public string Apellido { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
-        public string Telefono { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
 
-
+        // Nullable porque son opcionales y pueden venir NULL desde la BD
+        public string? Telefono { get; set; } = null;
+        public string? DeviceId { get; set; } = null;
+        public string? TokenHash { get; set; } = null;
     }
 
     public class ReciboSeguro
     {
-        public string Data { get; set; }
+        public string Data { get; set; } = string.Empty;
     }
 
-    // Este modelo sirve para recibir los datos DESPUÉS de descifrar
     public class RegisterRequest
     {
-        public string Nombre { get; set; }
-        public string Apellido { get; set; }
-        public string Email { get; set; }
-        public string Telefono { get; set; }
-        public string Password { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Apellido { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+
+        // Nullable porque el usuario puede no enviarlos
+        public string? Telefono { get; set; } = null;
+        public string? DeviceId { get; set; } = null;
     }
 
     public class GoogleRequest
     {
-        public string IdToken { get; set; }
+        public string IdToken { get; set; } = string.Empty;
     }
 }

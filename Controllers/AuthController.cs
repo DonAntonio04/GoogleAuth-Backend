@@ -1,8 +1,10 @@
 ﻿using GoogleAuth.Models;
 using GoogleAuth_Backend.Models;
 using GoogleAuth_Backend.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json.Linq;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Numerics;
@@ -67,8 +69,9 @@ namespace GoogleAuth_Backend.Controllers
                     Nombre = request.Nombre,
                     Apellido = request.Apellido,
                     Email = request.Email,
-                    Telefono = request.Telefono,
-                    Password = passwordHash
+                    Password = passwordHash,
+                    Telefono = request.Telefono ?? null,  // ✅ si no viene, guarda null
+                    DeviceId = request.DeviceId ?? null   // ✅ si no viene, guarda null
                 });
 
                 await _db.SaveChangesAsync();
@@ -95,7 +98,7 @@ namespace GoogleAuth_Backend.Controllers
         {
             try
             {
-                if (payload == null || string.IsNullOrEmpty(payload.                                                                                                         Data))
+                if (payload == null || string.IsNullOrEmpty(payload.Data))
                     return BadRequest(new { Error = "No se recibieron credenciales cifradas." });
 
                 string jsonDescifrado = Decrypt(payload.Data);
@@ -126,11 +129,12 @@ namespace GoogleAuth_Backend.Controllers
                 var respuestaObj = new
                 {
                     Token = jwtToken,
+                    Id = usuario.Id,
                     Nombre = usuario.Nombre,
                     Apellido = usuario.Apellido,
                     Email = usuario.Email,
-                    Telefono = usuario.Telefono,
-
+                    Telefono = usuario.Telefono ?? "",  // ✅ si es null devuelve ""
+                    DeviceId = usuario.DeviceId ?? ""   // ✅ si es null devuelve ""
                 };
 
                 string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
@@ -143,7 +147,6 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-      
         [HttpPost("google-auth")]
         public async Task<IActionResult> GoogleAuth([FromBody] GoogleRequest request)
         {
@@ -229,6 +232,7 @@ namespace GoogleAuth_Backend.Controllers
                 {
                     usuario = new UsuarioSimulado
                     {
+                       
                         Nombre = nombre,
                         Apellido = apellido,
                         Email = email,
@@ -250,12 +254,8 @@ namespace GoogleAuth_Backend.Controllers
                 var respuestaObj = new
                 {
                     Message = "Autenticación exitosa",
-                    Token = jwtToken,
-                    Nombre = usuario.Nombre,
-                    Apellido = usuario.Apellido,
-                    Email = usuario.Email,
-                    Telefono = usuario.Telefono,
-                    FechaNacimiento = fechaNacimiento
+                    Token = jwtToken
+ 
                 };
 
                 string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
@@ -273,28 +273,63 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-   
+        [Authorize]
+        [HttpGet("profile")] 
+         public IActionResult GetProfile()
+         {
+            try
+            {
+                var emailClaim = User.FindFirst(ClaimTypes.Email)?.Value;
+
+                if (string.IsNullOrEmpty(emailClaim))
+                    return Unauthorized(new { Error = "Token Inválido o no proporcionado." });
+
+                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == emailClaim);
+
+                if(usuario == null)
+                {
+                    return NotFound(new { Error = "Usuario no encontrado. " });
+                }
+
+                var respuestaObj = new
+                {
+                    Nombre = usuario.Nombre,
+                    Apellido = usuario.Apellido,
+                    Email = usuario.Email,
+                    Telefono = usuario.Telefono ?? "",  
+                  
+                };
+
+                string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
+
+                return Ok(new { Data = respuestaCifrada });
+
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = "Error al obtener el perfil", Detalle = ex.Message });
+            }
+         }
+
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
+        [Authorize] // Importante: Protegemos la ruta para extraer la identidad del JWT
+        public async Task<IActionResult> Logout()
         {
             try
             {
-                if (string.IsNullOrEmpty(request.Token))
-                    return BadRequest(new { Error = "El token es requerido." });
+                // Extraemos el email del usuario desde su token actual
+                var emailClaim = User.FindFirst(ClaimTypes.Email)?.Value;
 
-                var json = System.IO.File.Exists(RUTA_TOKENS_REVOCADOS)
-                           ? await System.IO.File.ReadAllTextAsync(RUTA_TOKENS_REVOCADOS)
-                           : "[]";
+                if (string.IsNullOrEmpty(emailClaim))
+                    return Unauthorized(new { Error = "Token inválido." });
 
-                var tokensRevocados = JsonSerializer.Deserialize<List<string>>(json) ?? new();
+                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == emailClaim);
 
-                if (!tokensRevocados.Contains(request.Token))
+                if (usuario != null)
                 {
-                    tokensRevocados.Add(request.Token);
-                    await System.IO.File.WriteAllTextAsync(
-                        RUTA_TOKENS_REVOCADOS,
-                        JsonSerializer.Serialize(tokensRevocados, new JsonSerializerOptions { WriteIndented = true })
-                    );
+                    // Invalidamos la sesión actual borrando el hash del token en la base de datos
+                    usuario.TokenHash = null;
+                    await _db.SaveChangesAsync();
                 }
 
                 return Ok(new { Message = "Sesión cerrada correctamente en el servidor." });
@@ -328,6 +363,7 @@ namespace GoogleAuth_Backend.Controllers
             return base64Result;
         }
 
+        //Desencriptamos
         private string? Decrypt(string cipherTextBase64)
         {
             try
@@ -343,7 +379,7 @@ namespace GoogleAuth_Backend.Controllers
                 using var decryptor = aes.CreateDecryptor();
                 byte[] result = decryptor.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
 
-          
+                // Convierte el resultado a texto normal 
                 string json = Encoding.UTF8.GetString(result); //punto de interrupcion
 
                 JsonDocument.Parse(json); // Valida que sea JSON bien formado
@@ -357,6 +393,7 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
+        //Hash de contraseña usando SHA256
         private string HashPassword(string password)
         {
             using var sha256 = SHA256.Create();
