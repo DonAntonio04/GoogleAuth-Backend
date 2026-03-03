@@ -10,7 +10,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var misOrigenesPermitidos = "PermitirColaborador";
-
 builder.Services.AddCors(options => {
     options.AddPolicy(name: misOrigenesPermitidos, policy => {
         policy.AllowAnyOrigin()
@@ -18,6 +17,10 @@ builder.Services.AddCors(options => {
               .WithMethods("GET", "POST", "PUT", "DELETE");
     });
 });
+
+builder.Configuration["Jwt:Key"] = "X7k#mP2$nQ9wL4vR8tY3uA6jF1eD5hB0";
+builder.Configuration["Jwt:Issuer"] = "https://localhost:7159";
+builder.Configuration["Jwt:Audience"] = "MiAppAngular";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -31,7 +34,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                                           Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
     });
 
@@ -48,7 +51,14 @@ var app = builder.Build();
 
 app.Use((context, next) =>
 {
-    context.Response.Headers.Append("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+    // Registramos un callback que se ejecuta justo antes de enviar los headers al cliente
+    context.Response.OnStarting(() =>
+    {
+        // Usamos el indexador [] en lugar de .Append() para evitar errores de llaves duplicadas
+        context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups";
+        return Task.CompletedTask;
+    });
+
     return next();
 });
 

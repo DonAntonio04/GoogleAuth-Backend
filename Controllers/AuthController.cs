@@ -3,6 +3,7 @@ using GoogleAuth_Backend.Models;
 using GoogleAuth_Backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json.Linq;
 using System.IdentityModel.Tokens.Jwt;
@@ -37,7 +38,6 @@ namespace GoogleAuth_Backend.Controllers
             _httpClientFactory = httpClientFactory;
         }
 
-  
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] EncryptedPayload payload)
         {
@@ -70,8 +70,8 @@ namespace GoogleAuth_Backend.Controllers
                     Apellido = request.Apellido,
                     Email = request.Email,
                     Password = passwordHash,
-                    Telefono = request.Telefono ?? null,  // ✅ si no viene, guarda null
-                    DeviceId = request.DeviceId ?? null   // ✅ si no viene, guarda null
+                    Telefono = request.Telefono ?? null,
+                    DeviceId = request.DeviceId ?? null
                 });
 
                 await _db.SaveChangesAsync();
@@ -124,17 +124,14 @@ namespace GoogleAuth_Backend.Controllers
                 if (usuario.Password != passwordHashIntento)
                     return Unauthorized(new { Error = "Correo o contraseña incorrectos." });
 
-                var jwtToken = GenerarJwtToken(usuario.Nombre, usuario.Email);
+                // Cambio aplicado: Pasamos el Id del usuario a la función
+                var jwtToken = GenerarJwtToken(usuario.Id, usuario.Nombre, usuario.Email);
 
                 var respuestaObj = new
                 {
                     Token = jwtToken,
                     Id = usuario.Id,
-                    Nombre = usuario.Nombre,
-                    Apellido = usuario.Apellido,
                     Email = usuario.Email,
-                    Telefono = usuario.Telefono ?? "",  // ✅ si es null devuelve ""
-                    DeviceId = usuario.DeviceId ?? ""   // ✅ si es null devuelve ""
                 };
 
                 string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
@@ -232,7 +229,6 @@ namespace GoogleAuth_Backend.Controllers
                 {
                     usuario = new UsuarioSimulado
                     {
-                       
                         Nombre = nombre,
                         Apellido = apellido,
                         Email = email,
@@ -247,15 +243,15 @@ namespace GoogleAuth_Backend.Controllers
                         usuario.Telefono = telefono;
                 }
 
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(); // Aquí se asigna el ID en BD si era un usuario nuevo
 
-                var jwtToken = GenerarJwtToken(usuario.Nombre, usuario.Email);
+                // Cambio aplicado: Pasamos el Id del usuario a la función
+                var jwtToken = GenerarJwtToken(usuario.Id, usuario.Nombre, usuario.Email);
 
                 var respuestaObj = new
                 {
                     Message = "Autenticación exitosa",
                     Token = jwtToken
- 
                 };
 
                 string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
@@ -274,50 +270,60 @@ namespace GoogleAuth_Backend.Controllers
         }
 
         [Authorize]
-        [HttpGet("profile")] 
-         public IActionResult GetProfile()
-         {
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
+        {
             try
             {
-                var emailClaim = User.FindFirst(ClaimTypes.Email)?.Value;
+                // Extraemos los datos del token (ahora sí usamos NameIdentifier)
+                var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var emailClaim = User.FindFirst(ClaimTypes.Email)?.Value
+                                 ?? User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
 
-                if (string.IsNullOrEmpty(emailClaim))
-                    return Unauthorized(new { Error = "Token Inválido o no proporcionado." });
+                if (string.IsNullOrEmpty(idClaim) || string.IsNullOrEmpty(emailClaim))
+                    return BadRequest(new { Error = "Datos incompletos en el token" });
 
-                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == emailClaim);
+                // Buscamos al usuario. 
+                // (Si el ID en tu clase Usuario es 'string', usa esto. 
+                // Si es 'int', usa: int.Parse(idClaim)
+                var usuario = await _db.Usuarios.FirstOrDefaultAsync(u =>
+                    u.Id.ToString() == idClaim && u.Email == emailClaim);
 
-                if(usuario == null)
+                if (usuario == null)
                 {
-                    return NotFound(new { Error = "Usuario no encontrado. " });
+                    // Log para que lo veas en la consola de Visual Studio
+                    Console.WriteLine($"DEBUG: Usuario no encontrado para ID {idClaim} y Email {emailClaim}");
+                    return NotFound(new { Error = "El usuario no existe en la base de datos." });
                 }
 
+                // Respuesta
                 var respuestaObj = new
                 {
                     Nombre = usuario.Nombre,
                     Apellido = usuario.Apellido,
                     Email = usuario.Email,
-                    Telefono = usuario.Telefono ?? "",  
-                  
+                    Telefono = usuario.Telefono ?? ""
                 };
 
-                string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
+                // Si sospechas de la encriptación, prueba devolverlo sin cifrar primero para testear
+                string jsonInfo = JsonSerializer.Serialize(respuestaObj);
+                string respuestaCifrada = Encrypt(jsonInfo);
 
                 return Ok(new { Data = respuestaCifrada });
-
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { Error = "Error al obtener el perfil", Detalle = ex.Message });
+                // Esto te dirá el error real en la respuesta de la API
+                return StatusCode(500, new { Error = ex.Message });
             }
-         }
+        }
 
         [HttpPost("logout")]
-        [Authorize] // Importante: Protegemos la ruta para extraer la identidad del JWT
+        [Authorize]
         public async Task<IActionResult> Logout()
         {
             try
             {
-                // Extraemos el email del usuario desde su token actual
                 var emailClaim = User.FindFirst(ClaimTypes.Email)?.Value;
 
                 if (string.IsNullOrEmpty(emailClaim))
@@ -327,7 +333,6 @@ namespace GoogleAuth_Backend.Controllers
 
                 if (usuario != null)
                 {
-                    // Invalidamos la sesión actual borrando el hash del token en la base de datos
                     usuario.TokenHash = null;
                     await _db.SaveChangesAsync();
                 }
@@ -340,14 +345,12 @@ namespace GoogleAuth_Backend.Controllers
             }
         }
 
-        //Preparar la llave para encriptar y desencriptar
         private byte[] DerivarLlaveAes()
         {
             byte[] llave16Bytes = Encoding.UTF8.GetBytes(SecretKey);
             return llave16Bytes;
         }
 
-        //Encriptamos 
         private string Encrypt(string plainText)
         {
             using var aes = Aes.Create();
@@ -363,12 +366,10 @@ namespace GoogleAuth_Backend.Controllers
             return base64Result;
         }
 
-        //Desencriptamos
         private string? Decrypt(string cipherTextBase64)
         {
             try
             {
-          
                 byte[] cipherBytes = Convert.FromBase64String(cipherTextBase64);
 
                 using var aes = Aes.Create();
@@ -379,37 +380,36 @@ namespace GoogleAuth_Backend.Controllers
                 using var decryptor = aes.CreateDecryptor();
                 byte[] result = decryptor.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
 
-                // Convierte el resultado a texto normal 
                 string json = Encoding.UTF8.GetString(result); //punto de interrupcion
 
-                JsonDocument.Parse(json); // Valida que sea JSON bien formado
+                JsonDocument.Parse(json);
                 return json;
             }
             catch (Exception ex)
             {
-             
                 Console.WriteLine($"[Decrypt Error]: {ex.Message}"); //punto de interupcion
                 return null;
             }
         }
 
-        //Hash de contraseña usando SHA256
         private string HashPassword(string password)
         {
             using var sha256 = SHA256.Create();
-
             byte[] hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-             string hashResult = Convert.ToBase64String(hashBytes); //punto de interupcion
+            string hashResult = Convert.ToBase64String(hashBytes); //punto de interupcion
             return hashResult;
         }
 
-        private string GenerarJwtToken(string nombre, string email)
+        // Cambio aplicado: La función ahora recibe 'id' como primer parámetro
+        private string GenerarJwtToken(string id, string nombre, string email)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
             {
+                // Cambio aplicado: Agregamos el ClaimTypes.NameIdentifier con el ID
+                new Claim(ClaimTypes.NameIdentifier,   id),
                 new Claim(ClaimTypes.Name,             nombre),
                 new Claim(ClaimTypes.Email,            email),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
