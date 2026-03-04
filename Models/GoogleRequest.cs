@@ -4,5 +4,6 @@
     {
         public string? IdToken { get; set; }
         public string? AccessToken { get; set; }
+        public string? DeviceId { get; set; } = null;
     }
 }

@@ -5,10 +5,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Newtonsoft.Json.Linq;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
-using System.Numerics;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -56,10 +54,10 @@ namespace GoogleAuth_Backend.Controllers
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
                 );
 
-                if (request == null || string.IsNullOrEmpty(request.Email))
+                if (request == null || string.IsNullOrEmpty(request.Correo))
                     return BadRequest(new { Error = "Datos inválidos o el correo está vacío." });
 
-                if (_db.Usuarios.Any(u => u.Email == request.Email))
+                if (_db.Usuarios.Any(u => u.Correo == request.Correo))
                     return BadRequest(new { Error = "El correo ya existe." });
 
                 string passwordHash = HashPassword(request.Password);
@@ -67,8 +65,9 @@ namespace GoogleAuth_Backend.Controllers
                 _db.Usuarios.Add(new UsuarioSimulado
                 {
                     Nombre = request.Nombre,
-                    Apellido = request.Apellido,
-                    Email = request.Email,
+                    ApellidoMaterno = request.ApellidoMaterno,
+                    ApellidoPaterno = request.ApellidoPaterno,
+                    Correo = request.Correo,
                     Password = passwordHash,
                     Telefono = request.Telefono ?? null,
                     DeviceId = request.DeviceId ?? null
@@ -79,7 +78,7 @@ namespace GoogleAuth_Backend.Controllers
                 var respuestaObj = new
                 {
                     Message = "Usuario registrado exitosamente.",
-                    Email = request.Email,
+                    Correo = request.Correo,
                     Nombre = request.Nombre
                 };
 
@@ -111,10 +110,10 @@ namespace GoogleAuth_Backend.Controllers
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
                 );
 
-                if (request == null || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+                if (request == null || string.IsNullOrEmpty(request.Correo) || string.IsNullOrEmpty(request.Password))
                     return BadRequest(new { Error = "Datos incompletos." });
 
-                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == request.Email);
+                var usuario = _db.Usuarios.FirstOrDefault(u => u.Correo == request.Correo);
 
                 if (usuario == null)
                     return Unauthorized(new { Error = "Correo o contraseña incorrectos." });
@@ -125,13 +124,12 @@ namespace GoogleAuth_Backend.Controllers
                     return Unauthorized(new { Error = "Correo o contraseña incorrectos." });
 
                 // Cambio aplicado: Pasamos el Id del usuario a la función
-                var jwtToken = GenerarJwtToken(usuario.Id, usuario.Nombre, usuario.Email);
-
+                var jwtToken = GenerarJwtToken(usuario.Id.ToString(), usuario.Nombre, usuario.Correo);
                 var respuestaObj = new
                 {
                     Token = jwtToken,
                     Id = usuario.Id,
-                    Email = usuario.Email,
+                    Correo = usuario.Correo,
                 };
 
                 string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));
@@ -163,8 +161,7 @@ namespace GoogleAuth_Backend.Controllers
 
                 string email = userInfo.RootElement.TryGetProperty("email", out var em) ? em.GetString() ?? "" : "";
                 string nombre = userInfo.RootElement.TryGetProperty("given_name", out var gn) ? gn.GetString() ?? "" : "";
-                string apellido = userInfo.RootElement.TryGetProperty("family_name", out var fn) ? fn.GetString() ?? "" : "";
-
+                string apellidoDeGoogle = userInfo.RootElement.TryGetProperty("family_name", out var fn) ? fn.GetString() ?? "" : "";
                 if (string.IsNullOrEmpty(email))
                     return BadRequest(new { Error = "No se pudo obtener el email de Google." });
 
@@ -223,31 +220,38 @@ namespace GoogleAuth_Backend.Controllers
                     Console.WriteLine($"[People API Error]: {peopleEx.Message}");
                 }
 
-                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == email);
+                // Aquí guardamos el email que viene de Google en la propiedad Correo de tu base de datos
+                var usuario = _db.Usuarios.FirstOrDefault(u => u.Correo == email);
 
                 if (usuario == null)
                 {
                     usuario = new UsuarioSimulado
                     {
                         Nombre = nombre,
-                        Apellido = apellido,
-                        Email = email,
+                        ApellidoPaterno = apellidoDeGoogle,
+                        ApellidoMaterno = "",
+                        Correo = email,
                         Telefono = telefono,
-                        Password = HashPassword(Guid.NewGuid().ToString())
+                        Password = HashPassword(Guid.NewGuid().ToString()),
+                        DeviceId = request.DeviceId // <-- Lo guardamos si es nuevo
                     };
                     _db.Usuarios.Add(usuario);
                 }
                 else
                 {
+                    // Si el usuario ya existe, actualizamos su teléfono (si no tenía)
                     if (string.IsNullOrEmpty(usuario.Telefono) && !string.IsNullOrEmpty(telefono))
                         usuario.Telefono = telefono;
+
+                    // <-- ACTUALIZAMOS el DeviceId con el dispositivo actual
+                    if (!string.IsNullOrEmpty(request.DeviceId))
+                        usuario.DeviceId = request.DeviceId;
                 }
 
-                await _db.SaveChangesAsync(); // Aquí se asigna el ID en BD si era un usuario nuevo
+                await _db.SaveChangesAsync(); // Aquí se guarda todo en SQL
 
                 // Cambio aplicado: Pasamos el Id del usuario a la función
-                var jwtToken = GenerarJwtToken(usuario.Id, usuario.Nombre, usuario.Email);
-
+                var jwtToken = GenerarJwtToken(usuario.Id.ToString(), usuario.Nombre, usuario.Correo);
                 var respuestaObj = new
                 {
                     Message = "Autenticación exitosa",
@@ -275,7 +279,7 @@ namespace GoogleAuth_Backend.Controllers
         {
             try
             {
-                // Extraemos los datos del token (ahora sí usamos NameIdentifier)
+                // Extraemos los datos del token
                 var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 var emailClaim = User.FindFirst(ClaimTypes.Email)?.Value
                                  ?? User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
@@ -283,16 +287,14 @@ namespace GoogleAuth_Backend.Controllers
                 if (string.IsNullOrEmpty(idClaim) || string.IsNullOrEmpty(emailClaim))
                     return BadRequest(new { Error = "Datos incompletos en el token" });
 
-                // Buscamos al usuario. 
-                // (Si el ID en tu clase Usuario es 'string', usa esto. 
-                // Si es 'int', usa: int.Parse(idClaim)
+                // Buscamos al usuario por Id y Correo
                 var usuario = await _db.Usuarios.FirstOrDefaultAsync(u =>
-                    u.Id.ToString() == idClaim && u.Email == emailClaim);
+                    u.Id.ToString() == idClaim && u.Correo == emailClaim);
 
                 if (usuario == null)
                 {
                     // Log para que lo veas en la consola de Visual Studio
-                    Console.WriteLine($"DEBUG: Usuario no encontrado para ID {idClaim} y Email {emailClaim}");
+                    Console.WriteLine($"DEBUG: Usuario no encontrado para ID {idClaim} y Correo {emailClaim}");
                     return NotFound(new { Error = "El usuario no existe en la base de datos." });
                 }
 
@@ -300,8 +302,9 @@ namespace GoogleAuth_Backend.Controllers
                 var respuestaObj = new
                 {
                     Nombre = usuario.Nombre,
-                    Apellido = usuario.Apellido,
-                    Email = usuario.Email,
+                    ApellidoPaterno = usuario.ApellidoPaterno,
+                    ApellidoMaterno = usuario.ApellidoMaterno,
+                    Correo = usuario.Correo,
                     Telefono = usuario.Telefono ?? ""
                 };
 
@@ -329,7 +332,7 @@ namespace GoogleAuth_Backend.Controllers
                 if (string.IsNullOrEmpty(emailClaim))
                     return Unauthorized(new { Error = "Token inválido." });
 
-                var usuario = _db.Usuarios.FirstOrDefault(u => u.Email == emailClaim);
+                var usuario = _db.Usuarios.FirstOrDefault(u => u.Correo == emailClaim);
 
                 if (usuario != null)
                 {
@@ -400,18 +403,17 @@ namespace GoogleAuth_Backend.Controllers
             return hashResult;
         }
 
-        // Cambio aplicado: La función ahora recibe 'id' como primer parámetro
-        private string GenerarJwtToken(string id, string nombre, string email)
+        // Cambio aplicado: GenerarJwtToken ahora recibe 'correo' y lo asigna al ClaimTypes.Email
+        private string GenerarJwtToken(string id, string nombre, string correo)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
             {
-                // Cambio aplicado: Agregamos el ClaimTypes.NameIdentifier con el ID
                 new Claim(ClaimTypes.NameIdentifier,   id),
                 new Claim(ClaimTypes.Name,             nombre),
-                new Claim(ClaimTypes.Email,            email),
+                new Claim(ClaimTypes.Email,            correo),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 

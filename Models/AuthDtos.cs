@@ -3,8 +3,9 @@
     public class UsuarioSimulado
     {
         public string Nombre { get; set; }
-        public string Apellido { get; set; }
-        public string Email { get; set; }
+        public string ApellidoPaterno { get; set; }
+        public string ApellidoMaterno { get; set; }
+        public string Correo { get; set; } = string.Empty;
         public string Telefono { get; set; }
         public string Password { get; set; }
         public string DeviceId { get; set; } 

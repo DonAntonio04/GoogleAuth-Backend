@@ -1,19 +1,25 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace GoogleAuth.Models
 {
     public class UsuarioSimulado
     {
-        public string Id { get; set; }
+  
+        public int Id { get; set; }
+
+        [Column("Nombres")]
         public string Nombre { get; set; } = string.Empty;
-        public string Apellido { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
+
+        public string ApellidoPaterno { get; set; } = string.Empty;
+        public string ApellidoMaterno { get; set; } = string.Empty;
+
+        public string Correo { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
 
-        // Nullable porque son opcionales y pueden venir NULL desde la BD
         public string? Telefono { get; set; } = null;
-        public string? DeviceId { get; set; } = null;
+        public string? DeviceId { get; set; } = null; 
         public string? TokenHash { get; set; } = null;
     }
 
@@ -25,11 +31,15 @@ namespace GoogleAuth.Models
     public class RegisterRequest
     {
         public string Nombre { get; set; } = string.Empty;
-        public string Apellido { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
+
+        public string ApellidoPaterno { get; set; } = string.Empty;
+        public string ApellidoMaterno { get; set; } = string.Empty;
+
+        [JsonPropertyName("Email")]
+        public string Correo { get; set; } = string.Empty;
+
         public string Password { get; set; } = string.Empty;
 
-        // Nullable porque el usuario puede no enviarlos
         public string? Telefono { get; set; } = null;
         public string? DeviceId { get; set; } = null;
     }
