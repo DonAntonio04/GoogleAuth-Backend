@@ -57,29 +57,51 @@ namespace GoogleAuth_Backend.Controllers
                 if (request == null || string.IsNullOrEmpty(request.Correo))
                     return BadRequest(new { Error = "Datos inválidos o el correo está vacío." });
 
-                if (_db.Usuarios.Any(u => u.Correo == request.Correo))
+                //  Validar si el correo ya existe
+                if (await _db.Usuarios.AnyAsync(u => u.Correo == request.Correo))
                     return BadRequest(new { Error = "El correo ya existe." });
 
                 string passwordHash = HashPassword(request.Password);
 
-                _db.Usuarios.Add(new UsuarioSimulado
-                {
-                    Nombre = request.Nombre,
-                    ApellidoMaterno = request.ApellidoMaterno,
-                    ApellidoPaterno = request.ApellidoPaterno,
-                    Correo = request.Correo,
-                    Password = passwordHash,
-                    Telefono = request.Telefono ?? null,
-                    DeviceId = request.DeviceId ?? null
-                });
 
-                await _db.SaveChangesAsync();
+
+                // Ejecutar el SP
+                var consulta = _db.Database.SqlQueryRaw<ResultadoSP>(
+                     "EXEC sp_RegistrarUsuario {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}",
+                      request.Nombre,
+                      request.ApellidoPaterno ?? "",
+                      request.ApellidoMaterno ?? "",
+                      request.Correo,
+                      request.Telefono ?? "",
+                      passwordHash,
+                      request.RolId,                 
+                      request.FechaNacimiento,     
+                      request.SuperUsuarioId,       
+                      request.UsuarioRol,          
+                      "SesionAPI",                  
+                      "App",
+                      "RegistroExterno",
+                     request.Confirmacion,          
+                     request.EsEstudiante          
+                );
+
+                // Obtenemos el primer resultado devuelto por el SP
+                var resultadoSp = await consulta.FirstOrDefaultAsync();
+
+                // Evaluar el resultado que arrojó tu SP
+                if (resultadoSp == null || resultadoSp.Resultado == "Error")
+                {
+                    return BadRequest(new { Error = "Error al registrar en base de datos.", Detalle = resultadoSp?.Mensaje });
+                }
+
+            
 
                 var respuestaObj = new
                 {
                     Message = "Usuario registrado exitosamente.",
                     Correo = request.Correo,
-                    Nombre = request.Nombre
+                    Nombre = request.Nombre,
+                    NuevoUsuarioId = resultadoSp.UsuarioID // Opcional: regresar el ID creado
                 };
 
                 string respuestaCifrada = Encrypt(JsonSerializer.Serialize(respuestaObj));

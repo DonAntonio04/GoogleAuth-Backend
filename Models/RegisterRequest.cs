@@ -16,5 +16,13 @@ namespace GoogleAuth_Backend.Models
         public string Telefono { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string DeviceId { get; set; } = string.Empty; // DeviceId agregado/confirmado
+
+
+        public int RolId { get; set; }
+        public int SuperUsuarioId { get; set; }
+        public int UsuarioRol { get; set; }
+        public DateTime FechaNacimiento { get; set; }
+        public bool EsEstudiante { get; set; }
+        public bool Confirmacion { get; set; }
     }
 }
